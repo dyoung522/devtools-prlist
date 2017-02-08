@@ -1,0 +1,41 @@
+#!/usr/bin/env ruby -w
+lib = File.expand_path("../../lib", __FILE__)
+$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+
+require "pr_list"
+
+module PRlist
+  begin
+    OptParse.parse(ARGV)
+  rescue RuntimeError
+    puts "Whoops!\n\n"
+
+    unless Options.token
+      puts "You didn't give us a GitHub token to authenticate with."
+    end
+
+    if Options.repos.nil? || Options.repos.empty?
+      puts "You didn't give us any GitHub repos to work with."
+    end
+
+    puts "\nThe easiest way to provide required information is to create a ./#{DevTools::PROGRAM}.conf file with the following content..."
+    puts "\ntoken: <GITHUB-TOKEN-SHA>\nrepos:\n  - repo-name-1\n  - repo-name-2"
+    exit 1
+  end
+
+  pull_requests = PullRequests.new Options.token, Options.repos
+
+  puts "QA Queue for #{pull_requests.repos.join(", ")}\n\n" if Options.verbose > 0
+
+  pull_requests.by_date do |pr|
+    next unless pr.has_label?(OptParse.label_values) if Options.queue
+
+    printf "%s%s (%s) %s",
+           Options.markdown ? "1. " : "",
+           Options.markdown ? "[PR ##{pr.number}](#{pr.pull_request.html_url})" : "PR ##{pr.number}",
+           Options.verbose > 1 ? pr.repo : pr.repo(short: true),
+           pr.title
+    printf " (labels: %s)", pr.labels.join(", ") if Options.verbose > 2
+    puts
+  end
+end
